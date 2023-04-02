@@ -1,6 +1,5 @@
 from machine import Pin, I2S
 import speech_model
-import time
 import gc
 
 ########## CONFIGURATION ##########
@@ -27,11 +26,11 @@ SWITCH_OFF_PIN = 17
 RELAY_PIN = 27
 
 ### STATES ###
-ALWAYS_ON = 0
-ALWAYS_OFF = 1
-AUTO = 2
-ON = 3
-OFF = 4
+ALWAYS_ON = 'ALWAYS_ON'
+ALWAYS_OFF = 'ALWAYS_OFF'
+AUTO = 'AUTO'
+ON = 'ON'
+OFF = 'OFF'
 
 ###################################
 
@@ -79,31 +78,6 @@ def switch_handler(pin):
         set_state(AUTO)
 
 
-def mic_handler(pin):
-    global state, mic, mic_samples
-
-    if DEBUG:
-        print("DEBUG: mic_handler")
-
-    if state == AUTO or state == ON or state == OFF:
-        label, prob = speech_model.predict(mic_samples)
-
-        if DEBUG:
-            print("DEBUG: label: ", label)
-            print("DEBUG: prob: ", prob)
-
-        if label == '[OTHER]' or prob < 60:
-            return
-        elif label == 'lumus':
-            set_state(ON)
-        elif label == 'nox':
-            set_state(OFF)
-        else:
-            print("ERROR: Unknown label: ", label)
-
-    mic.readinto(mic_samples)
-
-
 switch_off_pin.irq(
     trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING,
     handler=switch_handler
@@ -113,31 +87,38 @@ switch_on_pin.irq(
     handler=switch_handler
 )
 
-mic_samples = bytearray(7168)
-# mic.irq(mic_handler)
-mic.readinto(mic_samples)
 
-while True:
+def mic_handler():
+    global mic, mic_samples
 
     mic.readinto(mic_samples)
-    l, prob = speech_model.predict(mic_samples)
+    label, prob = speech_model.predict(mic_samples)
     gc.collect()
-    if l == '[OTHER]' or prob <= 70:
-        continue
-    label = l
-    speech_model.snapshot()
-    if label == 'lumus':  # Replace with your own label.
-        print('LUMUS', prob)
-        relay.on()
-    elif label == 'nox':  # Replace with your own label.
-        print("NOX", prob)
-        relay.off()
-    # if state == ALWAYS_ON or state == ON:
-    #     relay.on()
-    # elif state == ALWAYS_OFF or state == OFF:
-    #     relay.off()
-    # elif state != AUTO:
-    #     print("ERROR: Unknown state:", state)
 
-    # mic_handler(None)
-    # time.sleep(0.1)
+    if label == '[OTHER]' or prob < 70:
+        return
+    elif label == 'lumus':
+        if DEBUG:
+            print("DEBUG: Lumus:", prob, "%")
+
+        set_state(ON)
+    elif label == 'nox':
+        if DEBUG:
+            print("DEBUG: Nox:", prob, "%")
+
+        set_state(OFF)
+
+    speech_model.snapshot()
+
+
+mic_samples = bytearray(7168)
+gc.collect()
+
+while True:
+    if state == ALWAYS_ON or state == ON:
+        relay.on()
+    elif state == ALWAYS_OFF or state == OFF:
+        relay.off()
+
+    if state == AUTO or state == ON or state == OFF:
+        mic_handler()
