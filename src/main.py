@@ -19,8 +19,8 @@ MIC_DMA_COUNT = 16
 MIC_DMA_LEN = 256
 
 ### SWITCHES ###
-SWITCH_ON_PIN = 16
-SWITCH_OFF_PIN = 17
+SWITCH_ON_PIN = 18
+SWITCH_OFF_PIN = 19
 
 ### RELAY ###
 RELAY_PIN = 27
@@ -94,8 +94,9 @@ def mic_handler():
     mic.readinto(mic_samples)
     label, prob = speech_model.predict(mic_samples)
     gc.collect()
+    mic_samples = bytearray(7168)
 
-    if label == '[OTHER]' or prob < 70:
+    if label == '[OTHER]' or prob < 75:
         return
     elif label == 'lumus':
         if DEBUG:
@@ -116,9 +117,9 @@ gc.collect()
 
 while True:
     if state == ALWAYS_ON or state == ON:
-        relay.on()
+        relay.off()  # Inverted due relay schematic
     elif state == ALWAYS_OFF or state == OFF:
-        relay.off()
+        relay.on()  # Inverted due relay schematic
 
     if state == AUTO or state == ON or state == OFF:
         mic_handler()
